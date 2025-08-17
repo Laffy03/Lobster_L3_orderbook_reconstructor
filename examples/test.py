@@ -1,3 +1,5 @@
+import logging
+
 from src.lob_reconstuctor.lobster_sim import *
 import threading
 import os
@@ -11,6 +13,10 @@ file_start_date = "2016-07-05"
 starttime = 24900000
 endtime = 57900000
 nlevels = 10
+logging.basicConfig(
+    level=logging.ERROR,
+    format="%(levelname)s:%(name)s:%(message)s"
+)
 ### Change Me ######
 
 MSGBOOK = f"{ticker}_{file_start_date}_{starttime}_{endtime}_message_{nlevels}.csv"
