@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class OFIPair:
+
     size: int = 0
     count: int = 0
 

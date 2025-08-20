@@ -423,6 +423,35 @@ class LobsterSim:
         return app
 
     def plot_price_levels_heatmap(self, start_time: float, end_time: float, interval: float, show_midprice:bool=True) -> None:
+        """
+        Creates a heatmap graph of order book price levels over time.
+
+        The heatmap visualizes the depth of the order book at different price levels
+        over a specified time range. The x-axis represents time, the y-axis represents
+        price, and the color intensity at each point indicates the total size (volume)
+        of orders at that price level at that specific time.
+
+        Parameters
+        ----------
+        start_time : float
+            The timestamp in seconds after midnight to begin the simulation and plotting.
+        end_time : float
+            The timestamp in seconds after midnight to end the simulation and plotting.
+        interval : float
+            The time interval in seconds between each data point (snapshot) on the heatmap.
+        show_midprice : bool, optional
+            If True, a white line representing the mid-price of the order book is overlaid
+            on the heatmap. Defaults to True.
+
+        Notes
+        -----
+        - The `self.simulate_until()` and `self.simulate_from_current_until()` methods
+          are used to advance the simulation and collect order book snapshots.
+        - The price values are scaled by `self.orderbook.price_scaling` for accurate
+          visualization.
+        - This function uses the `plotly.graph_objects` library to generate an interactive
+          heatmap.
+        """
         l2_snapshots = []
         timestamps = []
         midprices = []
@@ -482,6 +511,25 @@ class LobsterSim:
         fig.show()
 
     def size_OFI_graph(self, start_time: float, end_time: float, frame_interval: float, reset_ofi_interval: float =np.inf) -> None:
+        """
+        Plots a time series graph of the cumulative Size Order Flow Imbalance (OFI).
+
+        This function simulates the order book over a specified time range, calculating
+        the cumulative Size OFI at regular intervals and plotting the results. The Size
+        OFI measures the imbalance between the total size of buy and sell orders.
+
+        Parameters
+        ----------
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation.
+        frame_interval : float
+            Time interval (in seconds) between each point plotted on the graph.
+        reset_ofi_interval : float, optional
+            The time interval (in seconds) at which the cumulative OFI value is reset to zero.
+            Defaults to `np.inf`, meaning the OFI is never reset within the plotting range.
+        """
         timestamps = []
         ofi_values = []
         self.simulate_until(start_time)
@@ -521,6 +569,25 @@ class LobsterSim:
 
 
     def count_OFI_graph(self, start_time: float, end_time: float, frame_interval: float, reset_ofi_interval: float=np.inf) -> None:
+        """
+        Plots a time series graph of the cumulative Count Order Flow Imbalance (OFI).
+
+        This function simulates the order book over a specified time range, calculating
+        the cumulative Count OFI at regular intervals and plotting the results. The Count
+        OFI measures the imbalance between the number of buy and sell orders.
+
+        Parameters
+        ----------
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation.
+        frame_interval : float
+            Time interval (in seconds) between each point plotted on the graph.
+        reset_ofi_interval : float, optional
+            The time interval (in seconds) at which the cumulative OFI value is reset to zero.
+            Defaults to `np.inf`, meaning the OFI is never reset within the plotting range.
+        """
         timestamps = []
         ofi_values = []
         self.simulate_until(start_time)
@@ -559,6 +626,21 @@ class LobsterSim:
         fig.show()
 
     def midprice_graph(self, start_time: float, end_time: float, interval: float) -> None:
+        """
+        Plots a time series graph of the mid-price of the order book.
+
+        This function simulates the order book over a specified time range, capturing
+        the mid-price at regular intervals and plotting the results as a line graph.
+
+        Parameters
+        ----------
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation.
+        interval : float
+            Time interval (in seconds) between each data point plotted on the graph.
+        """
         timestamps = []
         midprices = []
         curr_time = start_time
@@ -589,6 +671,23 @@ class LobsterSim:
         fig.show()
 
     def depth_percentile_graph(self, start_time: float, end_time: float, interval: float) -> None:
+        """
+        Creates a heatmap graph of order book depth in basis points (BPS) from the mid-price.
+
+        The heatmap visualizes the depth of the order book relative to the mid-price
+        over time. The x-axis is time, the y-axis is the price level in BPS from the
+        mid-price, and the color intensity at each point represents the size (volume)
+        at that price level. A white horizontal line at 0 BPS indicates the mid-price.
+
+        Parameters
+        ----------
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation.
+        interval : float
+            Time interval (in seconds) between each data point (snapshot) on the heatmap.
+        """
         timestamps = []
         l2_snapshots = []
         midprices = []
@@ -651,6 +750,26 @@ class LobsterSim:
         fig.show()
 
     def graph_trade_arrival_time(self, start_time: float, end_time: float, bin_size: float =None, filter_trade_type: Literal["aggro_lim", "vis_exec", "hid_exec"] = None) -> None:
+        """
+        Graphs the arrival count of bid and ask trades over time.
+
+        The function simulates trades within a specified time range, aggregates them
+        into time bins, and plots a bar chart showing the number of buy (bid) and
+        sell (ask) trades in each bin.
+
+        Parameters
+        ----------
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation.
+        bin_size : float, optional
+            The size of each time bin in seconds. If None, the bin size is set to
+            1/100th of the total time range.
+        filter_trade_type : Literal["aggro_lim", "vis_exec", "hid_exec"], optional
+            A filter to display only a specific type of trade. Defaults to None,
+            meaning all trade types are included.
+        """
         if bin_size is None:
             bin_size = (end_time - start_time) / 100
         self.simulate_until(start_time)
@@ -710,6 +829,25 @@ class LobsterSim:
         fig.show()
 
     def graph_trade_size_distribution(self, start_time: float, end_time: float, bin_size:int=20, filter_trade_type: Literal["aggro_lim", "vis_exec", "hid_exec"] = None) -> None:
+        """
+        Graphs the size distribution of bid and ask trades.
+
+        This function simulates trades within a specified time range, filters out outliers
+        using Z-score, and then creates a bar chart showing the distribution of trade
+        sizes for both bids and asks.
+
+        Parameters
+        ----------
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation.
+        bin_size : int, optional
+            The size of each trade size bin. Defaults to 20.
+        filter_trade_type : Literal["aggro_lim", "vis_exec", "hid_exec"], optional
+            A filter to display only a specific type of trade. Defaults to None,
+            meaning all trade types are included.
+        """
         self.simulate_until(start_time)
         self.orderbook.clear_trade_log()
         self.simulate_from_current_until(end_time)
@@ -780,9 +918,28 @@ class LobsterSim:
         fig.show()
 
     def print_features_to_csv(self, path: str, start_time: float, end_time: float, interval: float, features: dict) -> None:
-        
-        #  Example for Features: {"mid_price": {"method": "mid_price", "args": []},"spread": {"method": "bid_ask_spread", "args": []},"vol_at_105": {"method": "available_vol_at_price", "args": [105000]}}
+        """
+        Exports a time series of specified order book features to a CSV file.
 
+        The function simulates the order book from `start_time` to `end_time` at a given
+        `interval`. At each interval, it calculates a set of features defined by the
+        `features` dictionary and saves the results to a CSV file.
+
+        Parameters
+        ----------
+        path : str
+            The file path to save the output CSV.
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation.
+        interval : float
+            Time interval (in seconds) between each data point.
+        features : dict
+            A dictionary where keys are feature names and values are dictionaries
+            specifying the order book method to call and its arguments.
+            Example: `{"mid_price": {"method": "mid_price", "args": []},"spread": {"method": "bid_ask_spread", "args": []},"vol_at_105": {"method": "available_vol_at_price", "args": [105000]}}`
+        """
         self.simulate_until(start_time)
         results = []
         timestamps = []
