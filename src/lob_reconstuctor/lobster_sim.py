@@ -13,6 +13,51 @@ from plotly.subplots import make_subplots
 
 
 class LobsterSim:
+    """
+    LOBSTER simulation and visualization interface.
+
+    Provides functionality for replaying limit order book events,
+    computing order flow imbalance (OFI), and generating
+    visualizations using Plotly and Dash.
+
+    Parameters
+    ----------
+    orderbook: Orderbook
+        Orderbook object to operate on. See :class:`Orderbook`
+        in `orderbook.py` for full definition.
+
+    msg_book_file_path: str
+        LOBSTER message.csv file path
+
+    lob_book_file_path: str, default=None
+        LOBSTER orderbook.csv file path
+        Not necessary for end user (just use default val), used solely in debugging/testing
+        to ensure matching between reconstructed and expected
+
+    Attributes
+    ----------
+    orderbook: Orderbook
+        Orderbook object to operate on. See :class:`Orderbook`
+        in `orderbook.py` for full definition.
+
+    dataM: pd.DataFrame
+        With columns:
+            `Time`: float,
+            `Type`: Literal[
+                    `submit`,
+                    `cancel`,
+                    `delete`,
+                    `vis_exec`,
+                    `hid_exec`,
+                    `cross`,
+                    `halt`,
+                    ]
+            `OrderID`: int,
+            `Size`: int,
+            `Price`: int,
+            `Direction`: Literal[`bid`, `ask`]
+        Contains message data pulled from LOBSTER message.csv
+    """
     def __init__(self, orderbook: Orderbook, msg_book_file_path: str, lob_book_file_path: str = None):
         self.orderbook = orderbook
         self._last_idx = 0
@@ -54,7 +99,7 @@ class LobsterSim:
         self.dataM = dataM
 
         if lob_book_file_path is None:
-            self.dataL = None
+            self._dataL = None
         else:
             sample = pd.read_csv(lob_book_file_path, nrows=1, header=None)
             num_cols = sample.shape[1]
@@ -78,9 +123,18 @@ class LobsterSim:
                 dtype=int,
                 low_memory=False
             )
-            self.dataL = dataL
+            self._dataL = dataL
 
     def simulate_until(self, time: float) -> None:
+        """
+        Resets orderbook state.
+        Reconstructs orderbook state from beginning of message file until specified timestamp.
+
+        Parameters
+        ----------
+        time : float
+            Time in seconds after midnight to simulate until
+        """
         self._last_idx = 0
         self.orderbook.clear_orderbook()
         for row in self.dataM.itertuples(index=False):
@@ -91,6 +145,21 @@ class LobsterSim:
             self._last_idx += 1
 
     def simulate_from_current_until(self, time: float) -> None:
+        """
+        Continue reconstructing the order book from the current simulation state
+        up to a specified timestamp.
+        Does NOT reset orderbook state, unlike simulate_until.
+
+        Parameters
+        ----------
+        time : float
+            Time in seconds after midnight to simulate until.
+
+        Raises
+        ------
+        ValueError
+            If `time` is earlier than the current order book timestamp.
+        """
         if time < self.orderbook.curr_book_timestamp:
             raise ValueError("time parameter must be greater than current book timestamp")
         for row in self.dataM.iloc[self._last_idx:].itertuples(index=False):
@@ -101,6 +170,21 @@ class LobsterSim:
             self._last_idx += 1
 
     def display_L3_snapshots(self, start_time: float, end_time: float, interval: float) -> None:
+        """
+        Display multiple L3 order book snapshots as subplots over a specified time range.
+        Simulates the order book from `start_time` to `end_time` and generates a Plotly
+        figure with subplots showing the L3 state at each interval.
+        Each subplot title includes the current time, midprice, and bid-ask spread.
+
+        Parameters
+        ----------
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation and plotting.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation and plotting.
+        interval : float
+            Time interval (in seconds) between consecutive snapshots.
+        """
         self.simulate_until(start_time)
         curr_time = start_time + interval
         traces_tuples = []
@@ -130,6 +214,21 @@ class LobsterSim:
         fig.show()
 
     def display_L2_snapshots(self, start_time: float, end_time: float, interval: float) -> None:
+        """
+        Display multiple L2 order book snapshots as subplots over a specified time range.
+        Simulates the order book from `start_time` to `end_time` and generates a Plotly
+        figure with subplots showing the L3 state at each interval.
+        Each subplot title includes the current time, midprice, and bid-ask spread.
+
+        Parameters
+        ----------
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation and plotting.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation and plotting.
+        interval : float
+            Time interval (in seconds) between consecutive snapshots.
+        """
         self.simulate_until(start_time)
         curr_time = start_time + interval
         traces_tuples = []
@@ -160,13 +259,89 @@ class LobsterSim:
         )
         fig.show()
 
-    def sim_OFI(self, start_time: float, end_time: float) -> int:
+    def sim_size_OFI(self, start_time: float, end_time: float) -> int:
+        """
+        Simulate the order book between two timestamps and compute the cumulative
+        size-based Order Flow Imbalance (OFI).
+
+        Parameters
+        ----------
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation.
+
+        Returns
+        -------
+        int
+            The cumulative size-based OFI computed over the simulation interval.
+
+        Notes
+        -----
+        The method resets the cumulative OFI at the start of the simulation, then
+        processes all messages between `start_time` and `end_time`.
+        """
         self.simulate_until(start_time)
         self.orderbook.reset_cum_OFI()
-        self.simulate_until(end_time)
+        self.simulate_from_current_until(end_time)
         return self.orderbook.calc_size_OFI()
 
+    def sim_count_OFI(self, start_time: float, end_time: float) -> int:
+        """
+        Simulate the order book between two timestamps and compute the cumulative
+        count-based Order Flow Imbalance (OFI).
+
+        Parameters
+        ----------
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation.
+
+        Returns
+        -------
+        int
+            The cumulative count-based OFI computed over the simulation interval.
+
+        Notes
+        -----
+        The method resets the cumulative OFI at the start of the simulation, then
+        processes all messages between `start_time` and `end_time`.
+        """
+        self.simulate_until(start_time)
+        self.orderbook.reset_cum_OFI()
+        self.simulate_from_current_until(end_time)
+        return self.orderbook.calc_count_OFI()
+
     def create_animated_L3_app(self, start_time: float, end_time: float, interval: float) -> Dash:
+        """
+        Create an interactive Dash application showing an animated L3 order book.
+
+        The application displays horizontal bar charts of order sizes at each price
+        level, updating over time to animate the evolution of the L3 book. Users
+        can play/pause the animation or manually slide through frames.
+
+        Parameters
+        ----------
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation.
+        interval : float
+            Time interval (in seconds) between consecutive frames.
+
+        Returns
+        -------
+        dash.Dash
+            A Dash application instance that can be run or embedded in a web server.
+
+        Notes
+        -----
+        - The method simulates the order book over the specified interval and stores
+          snapshots in memory.
+        - Each frame shows a horizontal bar chart of L3 order sizes by price and direction.
+        - Users can interact via a play/pause button and a slider for manual navigation.
+        """
         frames = []
         timestamps = []
         self.simulate_until(start_time)
@@ -652,7 +827,7 @@ class LobsterSim:
     # DEBUGGING
     # --------------------------
     def _check_books_match(self, num_levels_to_check):
-        snapshot = self.dataL.iloc[self._last_idx]
+        snapshot = self._dataL.iloc[self._last_idx]
         reconstructed = self.orderbook.convert_orderbook_to_L2_dataframe()
         for side in ["ask", "bid"]:
             for level in range(num_levels_to_check):
@@ -719,7 +894,7 @@ class LobsterSim:
             raise AttributeError("Both self.dataM and self.dataL must be initialized before validation.")
 
         msg_len = len(self.dataM)
-        lob_len = len(self.dataL)
+        lob_len = len(self._dataL)
 
         if msg_len != lob_len:
             print(f"Row count mismatch: messages = {msg_len}, orderbook = {lob_len}")

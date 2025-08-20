@@ -29,7 +29,7 @@ class Orderbook:
         Minimum tick size (price increment).
     price_scaling : float, default=0.0001
         Scaling factor to convert integer price representation to display
-        prices (e.g., 0.0001 for LOBSTER data).
+        prices (e.g. 0.0001 for LOBSTER data).
 
     Attributes
     ----------
@@ -48,7 +48,6 @@ class Orderbook:
     trade_log : list
         List of executed trades (as namedtuples).
     """
-
     def __init__(self, nlevels: int, ticker: str, tick_size: float, price_scaling: float =0.0001):
         if tick_size <= 0 or price_scaling <= 0:
             raise ValueError("tick_size and price_scaling must be positive")
@@ -191,7 +190,6 @@ class Orderbook:
         Trade = namedtuple("Trade", ["timestamp", "trade_type", "direction", "size", "price", "order_id"])
         trade = Trade(timestamp, trade_type, direction, size, price, order_id)
         self.trade_log.append(trade)
-
 
     def _add_order(self, order: Order) -> None:
         """
