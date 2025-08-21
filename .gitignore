@@ -6,5 +6,10 @@
 __pychache__/
 *.pyc
 
+dist/
+build/
+*.egg-info
+
+docs/
 
 *.csv
