@@ -931,30 +931,43 @@ class LobsterSim:
         timestamp_round: int = 9,  # rounding for overlap checks to avoid float noise
     ) -> None:
         """
-        Export order book features to CSV with a default 'timestamp' column.
+        Exports order book features to a CSV file with a default 'timestamp' column.
 
-        Header on disk:
-            ["date", "ticker", "timestamp"] + list(features.keys())
+        This function simulates the order book over a specified time range at fixed
+        intervals, computes user-specified features, and writes the results to a CSV.
+        If the file already exists and both its schema and ticker match, non-overlapping
+        rows are appended and the data is re-sorted so earlier times appear first.
+        Otherwise, the file is overwritten with the new data.
 
-        Append vs Overwrite
-        -------------------
-        APPEND (read-merge-sort-rewrite) IFF:
-        1) file exists, AND
-        2) the on-disk columns are exactly the base columns + *the same set* of features
-            (order-insensitive), AND
-        3) all existing rows have ticker == `symbol` (or the file is empty).
+        Parameters
+        ----------
+        filename : str
+            Base name for the CSV file ('.csv' is added automatically if missing).
+        start_time : float
+            Timestamp (seconds after midnight) to start the simulation.
+        end_time : float
+            Timestamp (seconds after midnight) to end the simulation.
+        interval : float
+            Time step in seconds between samples (must be > 0).
+        features : dict
+            Dictionary where keys are feature names and values are dictionaries
+            specifying the order book method to call and its arguments.
+            Example: {"mid_price": {"method": "mid_price", "args": []}}.
+        batch_date : str
+            The trading date to associate with the exported rows (e.g., "2025-08-20").
+        symbol : str
+            The ticker symbol; must match the file's ticker to append, otherwise the
+            file is overwritten.
+        directory : str, optional
+            Output directory for the CSV. Defaults to the current directory ".".
+        timestamp_round : int, optional
+            Decimal places to round timestamps for overlap checks. Defaults to 9.
 
-        When appending:
-            - If (date == batch_date, ticker == symbol) exists, drop overlapping timestamps
-            (after rounding) from the new block (keep only non-overlapping).
-            - Merge with existing, sort by (date asc, timestamp asc), and rewrite the file.
-
-        OVERWRITE otherwise (missing file, schema mismatch, or ticker mismatch).
-
-        Notes
-        -----
-        - 'timestamp' is *default*, not a user feature.
-        - Sorting uses parsed dates (safe even if date strings).
+        Returns
+        -------
+        None
+            Writes the features to a CSV file. Prints status messages indicating
+            whether rows were written, appended, dropped due to overlap, or skipped.
         """
 
         if interval <= 0:
@@ -1126,7 +1139,7 @@ class LobsterSim:
                         raise AssertionError(
                             f"{side.upper()} level {level} missing in reconstruction: expected CSV price {csv_price}"
                         )
-        print("MashAllah")
+        print("Messagebook and orderbook match.")
 
     def _debug_sim(self, number_of_rows_to_sim):
         self.orderbook.clear_orderbook()
@@ -1150,7 +1163,7 @@ class LobsterSim:
             try:
                 self._check_books_match(num_levels_to_check)
             except AssertionError as e:
-                print(f"You fucked up at index: {self._last_idx}")
+                print(f"Error at index: {self._last_idx}")
                 print(e)
                 return
 
