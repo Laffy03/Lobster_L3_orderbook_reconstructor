@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 
 [project]
-name = "lob-reconstructor"
+name = "lobster_reconstructor"
 version = "0.1.0"
 authors = [
-  { name="Luc-Alexandre Fiechter", email="lucfiechter@g.ucla.edu" }
+  { name="Luc-Alexandre Fiechter", email="lucfiechter@g.ucla.edu" },
 ]
 description = "A LOBSTER data limit order book simulator and analysis toolkit."
 readme = "README.md"
@@ -17,8 +17,11 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
     "Topic :: Office/Business :: Financial",
+    "Topic :: Scientific/Engineering :: Mathematics",
 ]
 
 dependencies = [
@@ -33,3 +36,10 @@ dependencies = [
 
 [project.urls]
 "Homepage" = "https://github.com/Laffy03/Lobster_L3_orderbook_reconstructor"
+"Documentation" = "https://lobster-reconstructor.readthedocs.io/"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

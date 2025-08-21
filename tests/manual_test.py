@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
-from src.lob_reconstuctor.orderbook import Orderbook
-from src.lob_reconstuctor.orders import Order, LimitOrder
+from src.lobster_reconstructor.orderbook import Orderbook
+from src.lobster_reconstructor.orders import Order, LimitOrder
 
 class TestOrderbookBasic(unittest.TestCase):
     def setUp(self):

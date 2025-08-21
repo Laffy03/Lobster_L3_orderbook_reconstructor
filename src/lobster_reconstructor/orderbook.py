@@ -8,9 +8,9 @@ from plotly.basedatatypes import BaseTraceType
 import warnings
 import logging
 
-from src.lob_reconstuctor.orders import Order, LimitOrder
-from src.lob_reconstuctor.ofi import OFI
-from src.lob_reconstuctor.utils import format_timestamp
+from .orders import Order, LimitOrder
+from .ofi import OFI
+from .utils import format_timestamp
 
 logger = logging.getLogger(__name__)
 

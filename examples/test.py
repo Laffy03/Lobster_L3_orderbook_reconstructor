@@ -1,6 +1,6 @@
 import logging
 
-from src.lob_reconstuctor.lobster_sim import *
+from src.lobster_reconstructor.lobster_sim import *
 import threading
 import os
 
