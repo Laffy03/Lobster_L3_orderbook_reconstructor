@@ -1,3 +1,4 @@
+import os
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
@@ -906,66 +907,177 @@ class LobsterSim:
 
         fig.show()
 
-    def print_features_to_csv(self, path: str, start_time: float, end_time: float, interval: float, features: dict) -> None:
+    def print_features_to_csv(
+        self,
+        filename: str,
+        start_time: float,
+        end_time: float,
+        interval: float,
+        features: dict,
+        batch_date: str,   # e.g., "2025-08-20" (YYYY-MM-DD recommended)
+        symbol: str,       # ticker; must match existing file's ticker to append
+        directory: str = ".",
+        timestamp_round: int = 9,  # rounding for overlap checks to avoid float noise
+    ) -> None:
         """
-        Exports a time series of specified order book features to a CSV file.
+        Export order book features to CSV with a default 'timestamp' column.
 
-        The function simulates the order book from `start_time` to `end_time` at a given
-        `interval`. At each interval, it calculates a set of features defined by the
-        `features` dictionary and saves the results to a CSV file.
+        Header on disk:
+            ["date", "ticker", "timestamp"] + list(features.keys())
 
-        Parameters
-        ----------
-        path : str
-            The file path to save the output CSV.
-        start_time : float
-            Timestamp (seconds after midnight) to start the simulation.
-        end_time : float
-            Timestamp (seconds after midnight) to end the simulation.
-        interval : float
-            Time interval (in seconds) between each data point.
-        features : dict
-            A dictionary where keys are feature names and values are dictionaries
-            specifying the order book method to call and its arguments.
-            Example: `{"mid_price": {"method": "mid_price", "args": []},"spread": {"method": "bid_ask_spread", "args": []},"vol_at_105": {"method": "available_vol_at_price", "args": [105000]}}`
+        Append vs Overwrite
+        -------------------
+        APPEND (read-merge-sort-rewrite) IFF:
+        1) file exists, AND
+        2) the on-disk columns are exactly the base columns + *the same set* of features
+            (order-insensitive), AND
+        3) all existing rows have ticker == `symbol` (or the file is empty).
+
+        When appending:
+            - If (date == batch_date, ticker == symbol) exists, drop overlapping timestamps
+            (after rounding) from the new block (keep only non-overlapping).
+            - Merge with existing, sort by (date asc, timestamp asc), and rewrite the file.
+
+        OVERWRITE otherwise (missing file, schema mismatch, or ticker mismatch).
+
+        Notes
+        -----
+        - 'timestamp' is *default*, not a user feature.
+        - Sorting uses parsed dates (safe even if date strings).
         """
+
+        if interval <= 0:
+            raise ValueError("interval must be > 0")
+        if end_time < start_time:
+            raise ValueError("end_time must be >= start_time")
+
+        fname = filename if filename.lower().endswith(".csv") else f"{filename}.csv"
+        path = os.path.join(directory, fname)
+        os.makedirs(directory, exist_ok=True)
+
+        base_cols = ["date", "ticker", "timestamp"]
+        feature_cols = list(features.keys())
+        expected_feature_set = set(feature_cols)
+        expected_len = len(base_cols) + len(feature_cols)
+
+        do_append = False
+        existing_header = None
+
+        if os.path.exists(path):
+            try:
+                existing_header = list(pd.read_csv(path, nrows=0).columns)
+                if len(existing_header) == expected_len:
+                    existing_set = set(existing_header)
+                    if existing_set == (set(base_cols) | expected_feature_set):
+                        # Check ticker(s)
+                        existing_symbols = pd.read_csv(path, usecols=["ticker"])["ticker"].dropna().unique()
+                        if len(existing_symbols) == 0 or (len(existing_symbols) == 1 and existing_symbols[0] == symbol):
+                            do_append = True
+            except Exception:
+                do_append = False
+
+        if do_append and existing_header is not None:
+            write_cols = existing_header
+        else:
+            write_cols = base_cols + feature_cols
+
         self.simulate_until(start_time)
-        results = []
-        timestamps = []
 
-        curr_time = start_time
-        while curr_time <= end_time:
-            self.simulate_from_current_until(curr_time)
+        rows, ts_list = [], []
+        t = start_time
+        while t <= end_time + 1e-12: 
+            self.simulate_from_current_until(t)
             row = {}
-
-            for feature_name, spec in features.items():
+            for feat_name, spec in features.items():
                 method_name = spec.get("method")
                 args = spec.get("args", [])
-
                 if not hasattr(self.orderbook, method_name):
                     raise AttributeError(f"Orderbook has no method '{method_name}'")
-
                 method = getattr(self.orderbook, method_name)
                 try:
                     value = method(*args)
                 except Exception as e:
                     value = None
-                    print(f"Error computing {feature_name} at {curr_time}: {e}")
+                    print(f"Error computing {feat_name} at {t}: {e}")
+                row[feat_name] = value
 
-                row[feature_name] = value
+            rows.append(row)
+            ts_list.append(t)
+            t += interval
 
-            results.append(row)
-            timestamps.append(curr_time)
+        new_df = pd.DataFrame(rows)
+        new_df.insert(0, "timestamp", ts_list)
+        new_df.insert(0, "ticker", symbol)
+        new_df.insert(0, "date", batch_date)
 
-            curr_time += interval
+        new_df = new_df.reindex(columns=write_cols)
 
-        # Convert to DataFrame
-        df = pd.DataFrame(results)
-        df.insert(0, "timestamp", timestamps)
+        if not do_append:
+            new_df.to_csv(path, index=False)
+            print(f"Wrote {path} ({len(new_df)} rows) [overwrote: new file/schema/ticker mismatch]")
+            return
 
-        # Save to CSV
-        df.to_csv(path, index=False)
-        print(f"Features saved to {path}")
+        try:
+            existing_df = pd.read_csv(path)
+        except Exception:
+
+            new_df.to_csv(path, index=False)
+            print(f"Wrote {path} ({len(new_df)} rows) [fallback overwrite: failed to read existing file]")
+            return
+
+        existing_df = existing_df.reindex(columns=write_cols)
+        same_day_mask = (existing_df["date"] == batch_date) & (existing_df["ticker"] == symbol)
+        if same_day_mask.any():
+            exist_ts = existing_df.loc[same_day_mask, "timestamp"]
+            exist_min, exist_max = exist_ts.min(), exist_ts.max()
+            new_min, new_max = new_df["timestamp"].min(), new_df["timestamp"].max()
+            if new_max < exist_min:
+                relation = "before (entirely earlier than existing range)"
+            elif new_min > exist_max:
+                relation = "after (entirely later than existing range)"
+            else:
+                relation = "overlapping (some timestamps fall inside existing range)"
+            print(f"{batch_date} {symbol}: existing range [{exist_min}, {exist_max}], "
+                f"new range [{new_min}, {new_max}] -> {relation}")
+        else:
+            print(f"{batch_date} {symbol}: no existing rows; writing entire range.")
+
+        existing_df["__ts_key__"] = existing_df["timestamp"].round(timestamp_round)
+        new_df["__ts_key__"] = new_df["timestamp"].round(timestamp_round)
+
+        existing_ts_keys = set(existing_df.loc[same_day_mask, "__ts_key__"])
+        if existing_ts_keys:
+            before_len = len(new_df)
+            new_df = new_df[~new_df["__ts_key__"].isin(existing_ts_keys)]
+            dropped = before_len - len(new_df)
+            if dropped > 0:
+                print(f"Dropped {dropped} overlapping rows for {batch_date} {symbol} based on timestamp match.")
+
+        existing_df = existing_df.drop(columns=["__ts_key__"])
+        new_df = new_df.drop(columns=["__ts_key__"])
+
+        if new_df.empty:
+            print(f"No new (non-overlapping) rows to add for {batch_date} {symbol}. Left {path} unchanged.")
+            return
+
+        combined = pd.concat([existing_df, new_df], ignore_index=True)
+
+        sort_date = pd.to_datetime(combined["date"], errors="coerce")
+        combined = combined.assign(__date_sort__=sort_date)
+        combined = combined.sort_values(
+            by=["__date_sort__", "timestamp"],
+            ascending=[True, True],
+            kind="mergesort",  # stable
+        ).drop(columns="__date_sort__")
+
+        combined = combined.reindex(columns=write_cols)
+
+        combined.to_csv(path, index=False)
+        print(f"Updated {path}: added {len(new_df)} new rows; total rows = {len(combined)}")
+
+
+
+
 
 
 
