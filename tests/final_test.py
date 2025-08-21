@@ -1,4 +1,5 @@
-import time
+import os
+import pandas as pd
 from src.lob_reconstuctor.orderbook import Orderbook
 from src.lob_reconstuctor.orders import LimitOrder
 from src.lob_reconstuctor.lobster_sim import LobsterSim
@@ -81,5 +82,20 @@ sim = LobsterSim(lob, MSGBOOK)
 # except Exception as e:
 #     print("animate_L3_book single‐frame smoke test: ERROR ->", e)
 
+features = {
+    "mid_price": {"method": "mid_price", "args": []},
+    "spread": {"method": "bid_ask_spread", "args": []},
+}
 
+# Example: first write
+sim.print_features_to_csv(
+    filename="AAPL_features",          # you choose the file name ('.csv' auto-added if missing)
+    start_time=starttime - 2_000_000,              # use your existing bounds
+    end_time=endtime - 2_000_000,
+    interval=500000,                   # adjust step to your data's time units
+    features=features,
+    batch_date=file_start_date,        # user-provided date (e.g., "2019-01-02")
+    symbol=ticker,                     # user-provided ticker (e.g., "AAPL")
+    directory=".",                     # current dir; change if you want
+)
 

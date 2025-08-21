@@ -1,3 +1,4 @@
+import os
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
@@ -961,18 +962,15 @@ class LobsterSim:
         if end_time < start_time:
             raise ValueError("end_time must be >= start_time")
 
-        # Normalize path
         fname = filename if filename.lower().endswith(".csv") else f"{filename}.csv"
         path = os.path.join(directory, fname)
         os.makedirs(directory, exist_ok=True)
 
-        # Expected sets/columns
         base_cols = ["date", "ticker", "timestamp"]
         feature_cols = list(features.keys())
         expected_feature_set = set(feature_cols)
         expected_len = len(base_cols) + len(feature_cols)
 
-        # ---------- Decide append vs overwrite (order-insensitive features) ----------
         do_append = False
         existing_header = None
 
@@ -980,7 +978,6 @@ class LobsterSim:
             try:
                 existing_header = list(pd.read_csv(path, nrows=0).columns)
                 if len(existing_header) == expected_len:
-                    # Check that on-disk columns are base_cols + same feature set (order-insensitive)
                     existing_set = set(existing_header)
                     if existing_set == (set(base_cols) | expected_feature_set):
                         # Check ticker(s)
@@ -990,20 +987,16 @@ class LobsterSim:
             except Exception:
                 do_append = False
 
-        # Choose final column order for writing:
-        # - If appending, preserve the existing header order.
-        # - If overwriting, use base_cols + features in the order provided by `features`.
         if do_append and existing_header is not None:
             write_cols = existing_header
         else:
             write_cols = base_cols + feature_cols
 
-        # ---------- Simulate and collect new data ----------
         self.simulate_until(start_time)
 
         rows, ts_list = [], []
         t = start_time
-        while t <= end_time + 1e-12:  # epsilon for float fencepost
+        while t <= end_time + 1e-12: 
             self.simulate_from_current_until(t)
             row = {}
             for feat_name, spec in features.items():
@@ -1024,35 +1017,26 @@ class LobsterSim:
             t += interval
 
         new_df = pd.DataFrame(rows)
-        # Insert default columns
         new_df.insert(0, "timestamp", ts_list)
         new_df.insert(0, "ticker", symbol)
         new_df.insert(0, "date", batch_date)
 
-        # Reindex to *write_cols* (preserve order on append)
-        # If some features are missing (shouldn't happen), reindex will add NaNs—helps catch issues.
         new_df = new_df.reindex(columns=write_cols)
 
-        # ---------- Write logic ----------
         if not do_append:
-            # Overwrite with new schema/data
             new_df.to_csv(path, index=False)
             print(f"Wrote {path} ({len(new_df)} rows) [overwrote: new file/schema/ticker mismatch]")
             return
 
-        # APPEND: read, check ranges, dedup overlaps for same (date, ticker), merge, sort, rewrite
         try:
             existing_df = pd.read_csv(path)
         except Exception:
-            # Fallback overwrite if reading fails
+
             new_df.to_csv(path, index=False)
             print(f"Wrote {path} ({len(new_df)} rows) [fallback overwrite: failed to read existing file]")
             return
 
-        # Ensure both frames have the same columns/order for a clean concat
         existing_df = existing_df.reindex(columns=write_cols)
-
-        # ----- Double-check current time range in file for this (date, ticker) -----
         same_day_mask = (existing_df["date"] == batch_date) & (existing_df["ticker"] == symbol)
         if same_day_mask.any():
             exist_ts = existing_df.loc[same_day_mask, "timestamp"]
@@ -1069,8 +1053,6 @@ class LobsterSim:
         else:
             print(f"{batch_date} {symbol}: no existing rows; writing entire range.")
 
-        # ----- Dedup only within (date, ticker) on per-timestamp basis -----
-        # Use rounding to avoid float fuzz
         existing_df["__ts_key__"] = existing_df["timestamp"].round(timestamp_round)
         new_df["__ts_key__"] = new_df["timestamp"].round(timestamp_round)
 
@@ -1082,7 +1064,6 @@ class LobsterSim:
             if dropped > 0:
                 print(f"Dropped {dropped} overlapping rows for {batch_date} {symbol} based on timestamp match.")
 
-        # Remove helper columns
         existing_df = existing_df.drop(columns=["__ts_key__"])
         new_df = new_df.drop(columns=["__ts_key__"])
 
@@ -1090,10 +1071,8 @@ class LobsterSim:
             print(f"No new (non-overlapping) rows to add for {batch_date} {symbol}. Left {path} unchanged.")
             return
 
-        # ----- Merge and sort so earlier dates/times come first -----
         combined = pd.concat([existing_df, new_df], ignore_index=True)
 
-        # Sort using parsed dates for robustness (keeps on-disk 'date' strings intact)
         sort_date = pd.to_datetime(combined["date"], errors="coerce")
         combined = combined.assign(__date_sort__=sort_date)
         combined = combined.sort_values(
@@ -1102,7 +1081,6 @@ class LobsterSim:
             kind="mergesort",  # stable
         ).drop(columns="__date_sort__")
 
-        # Ensure final column order
         combined = combined.reindex(columns=write_cols)
 
         combined.to_csv(path, index=False)
