@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 name = "lob-reconstructor"
 version = "0.1.0"
 authors = [
-  { name="Luc-Alexandre Fiechter", email="lucfiechter@g.ucla.edu" }
+  { name="Luc-Alexandre Fiechter", email="lucfiechter@g.ucla.edu" },
 ]
 description = "A LOBSTER data limit order book simulator and analysis toolkit."
 readme = "README.md"
@@ -17,7 +17,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
-    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Math/Applied Math/Financial Math Researchers",
     "Topic :: Office/Business :: Financial",
 ]
 

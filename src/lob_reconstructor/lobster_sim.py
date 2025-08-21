@@ -5,9 +5,9 @@ import numpy as np
 from scipy.stats import zscore
 from typing import Literal
 
-from src.lob_reconstuctor.orderbook import Orderbook
-from src.lob_reconstuctor.orders import Order
-from src.lob_reconstuctor.utils import format_timestamp
+from .orderbook import Orderbook
+from .orders import Order
+from .utils import format_timestamp
 from dash import Dash, dcc, html, Input, Output, State, callback_context
 from plotly.subplots import make_subplots
 
@@ -22,41 +22,30 @@ class LobsterSim:
 
     Parameters
     ----------
-    orderbook: Orderbook
+    orderbook : Orderbook
         Orderbook object to operate on. See :class:`Orderbook`
         in `orderbook.py` for full definition.
-
-    msg_book_file_path: str
-        LOBSTER message.csv file path
-
-    lob_book_file_path: str, default=None
-        LOBSTER orderbook.csv file path
+    msg_book_file_path : str
+        LOBSTER message.csv file path.
+    lob_book_file_path : str, default=None
+        LOBSTER orderbook.csv file path.
         Not necessary for end user (just use default val), used solely in debugging/testing
-        to ensure matching between reconstructed and expected
+        to ensure matching between reconstructed and expected.
 
     Attributes
     ----------
-    orderbook: Orderbook
+    orderbook : Orderbook
         Orderbook object to operate on. See :class:`Orderbook`
         in `orderbook.py` for full definition.
+    dataM : pd.DataFrame
+        Contains message data pulled from LOBSTER message.csv with columns:
 
-    dataM: pd.DataFrame
-        With columns:
-            `Time`: float,
-            `Type`: Literal[
-                    `submit`,
-                    `cancel`,
-                    `delete`,
-                    `vis_exec`,
-                    `hid_exec`,
-                    `cross`,
-                    `halt`,
-                    ]
-            `OrderID`: int,
-            `Size`: int,
-            `Price`: int,
-            `Direction`: Literal[`bid`, `ask`]
-        Contains message data pulled from LOBSTER message.csv
+        - `Time`: float
+        - `Type`: Literal['submit', 'cancel', 'delete', 'vis_exec', 'hid_exec', 'cross', 'halt']
+        - `OrderID`: int
+        - `Size`: int
+        - `Price`: int
+        - `Direction`: Literal['bid', 'ask']
     """
     def __init__(self, orderbook: Orderbook, msg_book_file_path: str, lob_book_file_path: str = None):
         self.orderbook = orderbook
