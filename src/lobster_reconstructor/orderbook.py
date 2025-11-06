@@ -65,6 +65,7 @@ class Orderbook:
         self.midprice_change_timestamp = 0.0
         self.cum_OFI = OFI()
         self.trade_log = []
+        self.warning_count = 0 #Temp, do not push
 
     # -------------------------
     # State management
@@ -296,11 +297,13 @@ class Orderbook:
         if order.price not in side:
             logger.warning("Warning _execute_vis_order: Price %s not found on %s side.\n"
                            "Order info: %s", order.price, order.direction, order)
+            self.warning_count += 1
             return
 
         if order.order_id not in side[order.price]:
             logger.warning("Warning _execute_vis_order: Order ID %s not found at price %s on %s side.\n"
                            "Order info: %s", order.order_id, order.price, order.direction, order)
+            self.warning_count += 1
             return
 
         side[order.price][order.order_id].size -= order.size
@@ -333,11 +336,13 @@ class Orderbook:
         if order.price not in side:
             logger.warning("Warning _cancel_order: Price %s not found on %s side.\n"
                            "Order info: %s", order.price, order.direction, order)
+            self.warning_count += 1
             return
 
         if order.order_id not in side[order.price]:
             logger.warning("Warning _cancel_order: Order ID %s not found at price %s on %s side.\n"
                            "Order info: %s", order.order_id, order.price, order.direction, order)
+            self.warning_count += 1
             return
 
         side[order.price][order.order_id].size -= order.size
@@ -373,10 +378,12 @@ class Orderbook:
             else:
                 logger.warning("Warning _delete_order: Price %s not found on %s side.\n"
                              "Order info: %s", order.price, order.direction, order)
+                self.warning_count += 1
                 return
         else:
             logger.warning("Warning _delete_order: Order ID %s not found at price %s on %s side.\n"
                          "Order info: %s", order.order_id, order.price, order.direction, order)
+            self.warning_count += 1
             return
 
     def _handle_hidden_exec(self, order: Order):

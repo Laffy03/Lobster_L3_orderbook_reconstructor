@@ -3,6 +3,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+import csv
 from scipy.stats import zscore
 from typing import Literal
 
@@ -11,6 +12,16 @@ from .orders import Order
 from .utils import format_timestamp
 from dash import Dash, dcc, html, Input, Output, State, callback_context
 from plotly.subplots import make_subplots
+
+
+class MatchingError(Exception):
+    def __init__(self, side, csv_price, csv_size, recon_price, recon_size, message):
+        self.side = side
+        self.csv_price = csv_price
+        self.csv_size = csv_size
+        self.recon_price = recon_price
+        self.recon_size = recon_size
+        super().__init__(message)
 
 
 class LobsterSim:
@@ -907,7 +918,7 @@ class LobsterSim:
 
         fig.show()
 
-    def print_features_to_csv(
+    def     print_features_to_csv(
         self,
         filename: str,
         start_time: float,
@@ -1089,16 +1100,11 @@ class LobsterSim:
         print(f"Updated {path}: added {len(new_df)} new rows; total rows = {len(combined)}")
 
 
-
-
-
-
-
     # --------------------------
     # DEBUGGING
     # --------------------------
-    def _check_books_match(self, num_levels_to_check):
-        snapshot = self._dataL.iloc[self._last_idx]
+    def _check_books_match(self, num_levels_to_check, dataL_loc, verbose=False):
+        snapshot = self._dataL.iloc[dataL_loc]
         reconstructed = self.orderbook.convert_orderbook_to_L2_dataframe()
         for side in ["ask", "bid"]:
             for level in range(num_levels_to_check):
@@ -1112,75 +1118,76 @@ class LobsterSim:
 
                     # If CSV has dummy value but reconstructed has a real value, fail
                     if (side == "ask" and csv_price == 9999999999) or (side == "bid" and csv_price == -9999999999):
-                        raise AssertionError(
-                            f"{side.upper()} level {level} unexpectedly present in reconstruction: CSV has dummy value but reconstruction has price {recon_price}"
+                        raise MatchingError(
+                            side=side,
+                            csv_price=csv_price,
+                            csv_size=csv_size,
+                            recon_price=recon_price,
+                            recon_size=recon_size,
+                            message = f"{side.upper()} level {level+1} unexpectedly present in reconstruction: CSV has dummy value but reconstruction has price {recon_price}"
                         )
                     if recon_price != csv_price:
-                        raise AssertionError(
-                            f"{side.upper()} level {level} price mismatch: CSV={csv_price}, Reconstructed={recon_price}"
+                        raise MatchingError(
+                            side=side,
+                            csv_price=csv_price,
+                            csv_size=csv_size,
+                            recon_price=recon_price,
+                            recon_size=recon_size,
+                            message= f"{side.upper()} level {level+1} price mismatch: CSV={csv_price}, Reconstructed={recon_price}"
                         )
                     if recon_size != csv_size:
-                        raise AssertionError(
-                            f"{side.upper()} level {level} size mismatch: CSV={csv_size}, Reconstructed={recon_size}"
+                        raise MatchingError(
+                            side=side,
+                            csv_price=csv_price,
+                            csv_size=csv_size,
+                            recon_price=recon_price,
+                            recon_size=recon_size,
+                            message= f"{side.upper()} level {level+1} size mismatch: CSV={csv_size}, Reconstructed={recon_size}"
                         )
                 else:
                     if not ((side == "ask" and csv_price == 9999999999) or (side == "bid" and csv_price == -9999999999)):
-                        raise AssertionError(
-                            f"{side.upper()} level {level} missing in reconstruction: expected CSV price {csv_price}"
+                        raise MatchingError(
+                            side=side,
+                            csv_price=csv_price,
+                            csv_size=csv_size,
+                            recon_price=-1,
+                            recon_size=-1,
+                            message=f"{side.upper()} level {level+1} missing in reconstruction: expected CSV price {csv_price}"
                         )
-        print("Messagebook and orderbook match.")
+        if verbose: print("Messagebook and orderbook match.")
 
-    def _debug_sim(self, number_of_rows_to_sim):
-        self.orderbook.clear_orderbook()
-        for i, row in enumerate(self.dataM.itertuples(index=False)):
-            if i > number_of_rows_to_sim:
-                break
-            curr_order = Order(row.Time, row.Type, row.OrderID, row.Size, row.Price, row.Direction)
-            self.orderbook.process_order(curr_order)
-        self._last_idx = number_of_rows_to_sim
 
-    def _debug_sim_next(self):
-        row = self.dataM.iloc[self._last_idx+1]
-        curr_order = Order(row.Time, row.Type, row.OrderID, row.Size, row.Price, row.Direction)
-        self.orderbook.process_order(curr_order)
-        self._last_idx += 1
-
-    def _check_full_book(self, num_levels_to_check):
-        for row in self.dataM.itertuples(index=False):
-            curr_order = Order(row.Time, row.Type, row.OrderID, row.Size, row.Price, row.Direction)
-            self.orderbook.process_order(curr_order)
+    def _check_full_book(self, num_levels_to_check, n_level_message_df):
+        print("Checking books match...")
+        print(f"Comparing {num_levels_to_check} levels of books match from a csv file {self.dataM.size} lines long...")
+        dataL_loc = 0
+        curr_order = None
+        reference_order = None
+        for r in n_level_message_df.itertuples(index=False):
+            reference_order = Order(r.Time, r.Type, r.OrderID, r.Size, r.Price, r.Direction)
+            for row in self.dataM.iloc[self._last_idx:].itertuples(index=False):
+                curr_order = Order(row.Time, row.Type, row.OrderID, row.Size, row.Price, row.Direction)
+                self.orderbook.process_order(curr_order)
+                self._last_idx += 1
+                if reference_order == curr_order:
+                    break
             try:
-                self._check_books_match(num_levels_to_check)
-            except AssertionError as e:
-                print(f"Error at index: {self._last_idx}")
+                self._check_books_match(num_levels_to_check, dataL_loc)
+                dataL_loc += 1
+                batch_start_index = self._last_idx
+            except MatchingError as e:
+                print("\n--- ERROR: Mismatch detected! ---")
+                print(f"Error caught at message index: {self._last_idx} (Snapshot Time: {curr_order.timestamp})")
+                print(
+                    f"The bug was caused by one of the messages in this batch (indices {batch_start_index} to {self._last_idx - 1}):")
+
+                print(self.dataM.iloc[batch_start_index: self._last_idx])
+
+                print("\n--- ERROR DETAILS ---")
                 print(e)
+                self.orderbook.display_L2_order_book()
                 return
 
-            self._last_idx += 1
+            if self._last_idx%10000 == 0:
+                print(f"{self._last_idx} / {self.dataM.size}")
         print("Full book is good")
-
-
-    def _validate_lobster_data(self):
-        if not hasattr(self, "dataM") or not hasattr(self, "dataL"):
-            raise AttributeError("Both self.dataM and self.dataL must be initialized before validation.")
-
-        msg_len = len(self.dataM)
-        lob_len = len(self._dataL)
-
-        if msg_len != lob_len:
-            print(f"Row count mismatch: messages = {msg_len}, orderbook = {lob_len}")
-            min_len = min(msg_len, lob_len)
-            print(f"Extra rows in message file starting from index {min_len}")
-            return
-
-        print(f"Data aligned correctly, {msg_len} lines in file")
-
-
-
-
-
-
-
-
-
-
