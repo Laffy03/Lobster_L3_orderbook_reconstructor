@@ -11,10 +11,10 @@ logging.basicConfig(
 )
 
 # File path for LOBSTER message file
-MSGBOOK = "message.csv"
+MSGBOOK = r"C:\Users\lucfi\PycharmProjects\Lobster_L3_orderbook_reconstructor\tests\AAPL_2019-01-02_24900000_57900000_message_10.csv"
 
 # Configuration Parameters
-ticker = "AAA"
+ticker = "AAPL"
 nlevels = 10
 tick_size = 0.01
 
@@ -43,21 +43,21 @@ example.graph_trade_arrival_time(34200, 57600)
 example.graph_trade_arrival_time(34200,57600, filter_trade_type="hid_exec") #Only show hidden execution arrival times
 example.graph_trade_size_distribution(34200, 57600)
 
-features = {
-    "mid_price": {"method": "mid_price", "args": []},
-    "spread": {"method": "bid_ask_spread", "args": []},
-}
-
-# Example: first write
-example.print_features_to_csv(
-    filename="AAPL_features",       # '.csv' auto-added if missing
-    start_time=34200,
-    end_time=36000,
-    interval=300,                   # adjust step to your data's time units
-    features=features,
-    batch_date="2019-01-02",        # user-provided date (e.g., "2019-01-02")
-    symbol=ticker,                  # user-provided ticker (e.g., "AAPL")
-    directory=".",                  # current dir; change if you want
-)
-
-input("Press Enter to exit the Dash app...\n")
+# features = {
+#     "mid_price": {"method": "mid_price", "args": []},
+#     "spread": {"method": "bid_ask_spread", "args": []},
+# }
+#
+# # Example: first write
+# example.print_features_to_csv(
+#     filename="AAPL_features",       # '.csv' auto-added if missing
+#     start_time=34200,
+#     end_time=36000,
+#     interval=300,                   # adjust step to your data's time units
+#     features=features,
+#     batch_date="2019-01-02",        # user-provided date (e.g., "2019-01-02")
+#     symbol=ticker,                  # user-provided ticker (e.g., "AAPL")
+#     directory=".",                  # current dir; change if you want
+# )
+#
+# input("Press Enter to exit the Dash app...\n")

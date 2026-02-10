@@ -8,9 +8,9 @@ logger.setLevel(logging.DEBUG)
 
 logging.basicConfig(level=logging.NOTSET)
 
-complete_message_file = r"message_0.csv"
-n_level_message_file = r"message_10.csv"
-orderbook_file = r"orderbook_10.csv"
+complete_message_file = r"AAPL_2019-01-02_24900000_57900000_message_0.csv"
+n_level_message_file = r"AAPL_2019-01-02_24900000_57900000_message_10.csv"
+orderbook_file = r"AAPL_2019-01-02_24900000_57900000_orderbook_10.csv"
 
 
 columns = ["Time", "Type", "OrderID", "Size", "Price", "Direction"]
@@ -44,8 +44,8 @@ n_level_message_df['Type'] = n_level_message_df['Type'].map(event_map)
 n_level_message_df['Direction'] = n_level_message_df['Direction'].map({-1: 'ask', 1: 'bid'})
 
 
-test_lob = Orderbook(10, "ticker", 0.01)
+test_lob = Orderbook(5, "ticker", 0.01)
 test_sim = LobsterSim(test_lob, complete_message_file, orderbook_file)
 
-test_sim._check_full_book(10, n_level_message_df)
+test_sim._check_full_book(5, n_level_message_df)
 

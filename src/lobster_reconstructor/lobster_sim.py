@@ -1159,7 +1159,7 @@ class LobsterSim:
 
     def _check_full_book(self, num_levels_to_check, n_level_message_df):
         print("Checking books match...")
-        print(f"Comparing {num_levels_to_check} levels of books match from a csv file {self.dataM.size} lines long...")
+        print(f"Comparing {num_levels_to_check} levels of books match from a csv file {self.dataM.shape[0]} lines long...")
         dataL_loc = 0
         curr_order = None
         reference_order = None
@@ -1189,5 +1189,5 @@ class LobsterSim:
                 return
 
             if self._last_idx%10000 == 0:
-                print(f"{self._last_idx} / {self.dataM.size}")
+                print(f"{self._last_idx} / {self.dataM.shape[0]}")
         print("Full book is good")

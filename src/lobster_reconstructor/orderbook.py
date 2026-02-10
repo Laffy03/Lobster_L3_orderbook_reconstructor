@@ -30,6 +30,10 @@ class Orderbook:
     price_scaling : float, default=0.0001
         Scaling factor to convert integer price representation to display
         prices (e.g. 0.0001 for LOBSTER data).
+    use_matching_engine: bool, default=False
+        Whether to use built in matching engine to compute orderbook state.
+        For exact reconstruction, set use_matching_engine=False.
+        For clean snapshot visualization set use_matching_engine=True.
 
     Attributes
     ----------
@@ -48,7 +52,7 @@ class Orderbook:
     trade_log : list
         List of executed trades (as namedtuples).
     """
-    def __init__(self, nlevels: int, ticker: str, tick_size: float, price_scaling: float =0.0001):
+    def __init__(self, nlevels: int, ticker: str, tick_size: float, price_scaling: float =0.0001, use_matching_engine: bool = False):
         if tick_size <= 0 or price_scaling <= 0:
             raise ValueError("tick_size and price_scaling must be positive")
         if not isinstance(nlevels, int):
@@ -65,7 +69,8 @@ class Orderbook:
         self.midprice_change_timestamp = 0.0
         self.cum_OFI = OFI()
         self.trade_log = []
-        self.warning_count = 0 #Temp, do not push
+        self._warning_count = 0
+        self._use_auto_matching_engine = use_matching_engine
 
     # -------------------------
     # State management
@@ -195,8 +200,10 @@ class Orderbook:
     def _add_order(self, order: Order) -> None:
         """
         Insert a new order into the book.
-        If the order crosses the spread, it is executed against the
-        opposite side. Any unfilled remainder is added to the book.
+        If auto-matching is enabled and the order crosses the spread,
+        it is executed against the opposite side first.
+        Any unfilled remainder (or the full order if no matching occurred)
+        is added to the book.
 
         Parameters
         ----------
@@ -204,27 +211,23 @@ class Orderbook:
             Order object containing event details. See :class:`Order`
             in `orders.py` for full definition.
         """
-        if self._does_order_cross_spread(order):
-            remaining = self._execute_against_opposite_book(order)
-            if remaining > 0:
-                remaining_order = LimitOrder(
-                    timestamp=order.timestamp,
-                    order_id=order.order_id,
-                    size=remaining,
-                    price=order.price,
-                    direction=order.direction
-                )
-                self._update_LOFI(remaining_order)
-                side = getattr(self, f'{order.direction}s')
-                if order.price not in side:
-                    side[order.price] = {}
-                side[order.price][order.order_id] = remaining_order
-        else:
-            self._update_LOFI(order)
+        remaining_size = order.size
+        if self._use_auto_matching_engine and self._does_order_cross_spread(order):
+            remaining_size = self._execute_against_opposite_book(order)
+
+        if remaining_size > 0:
+            resting_order = LimitOrder(
+                timestamp=order.timestamp,
+                order_id=order.order_id,
+                size=remaining_size,
+                price=order.price,
+                direction=order.direction
+            )
+            self._update_LOFI(resting_order)
             side = getattr(self, f'{order.direction}s')
             if order.price not in side:
                 side[order.price] = {}
-            side[order.price][order.order_id] = LimitOrder(timestamp=order.timestamp, order_id=order.order_id, size=order.size, price=order.price, direction=order.direction)
+            side[order.price][order.order_id] = resting_order
 
     def _execute_against_opposite_book(self, order: Order) -> int:
         """
@@ -297,13 +300,13 @@ class Orderbook:
         if order.price not in side:
             logger.warning("Warning _execute_vis_order: Price %s not found on %s side.\n"
                            "Order info: %s", order.price, order.direction, order)
-            self.warning_count += 1
+            self._warning_count += 1
             return
 
         if order.order_id not in side[order.price]:
             logger.warning("Warning _execute_vis_order: Order ID %s not found at price %s on %s side.\n"
                            "Order info: %s", order.order_id, order.price, order.direction, order)
-            self.warning_count += 1
+            self._warning_count += 1
             return
 
         side[order.price][order.order_id].size -= order.size
@@ -336,13 +339,13 @@ class Orderbook:
         if order.price not in side:
             logger.warning("Warning _cancel_order: Price %s not found on %s side.\n"
                            "Order info: %s", order.price, order.direction, order)
-            self.warning_count += 1
+            self._warning_count += 1
             return
 
         if order.order_id not in side[order.price]:
             logger.warning("Warning _cancel_order: Order ID %s not found at price %s on %s side.\n"
                            "Order info: %s", order.order_id, order.price, order.direction, order)
-            self.warning_count += 1
+            self._warning_count += 1
             return
 
         side[order.price][order.order_id].size -= order.size
@@ -378,12 +381,12 @@ class Orderbook:
             else:
                 logger.warning("Warning _delete_order: Price %s not found on %s side.\n"
                              "Order info: %s", order.price, order.direction, order)
-                self.warning_count += 1
+                self._warning_count += 1
                 return
         else:
             logger.warning("Warning _delete_order: Order ID %s not found at price %s on %s side.\n"
                          "Order info: %s", order.order_id, order.price, order.direction, order)
-            self.warning_count += 1
+            self._warning_count += 1
             return
 
     def _handle_hidden_exec(self, order: Order):
@@ -396,7 +399,16 @@ class Orderbook:
             Order object containing event details. See :class:`Order`
             in `orders.py` for full definition.
         """
-        self._record_trade(order.timestamp, "hid_exec", order.direction, order.size, order.price, order.order_id)
+        inferred_direction = order.direction # LOBSTER gives us no way to know the hidden exec direction with certainty. Thus, infer direction based on midprice.
+        if self.mid_price() is not None:
+            if order.price < self.mid_price():
+                inferred_direction = 'bid'
+            elif order.price > self.mid_price():
+                inferred_direction = 'ask'
+            else:  # If hidden exec is exactly equal to midprice, set it to default
+                pass
+
+        self._record_trade(order.timestamp, "hid_exec", inferred_direction, order.size, order.price, order.order_id)
 
     # --------------------------
     # OFI helpers
