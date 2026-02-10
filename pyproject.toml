@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lobster_reconstructor"
-version = "0.1.2"
+version = "0.1.3"
 authors = [
   { name="Luc-Alexandre Fiechter", email="lucfiechter@g.ucla.edu" },
 ]
